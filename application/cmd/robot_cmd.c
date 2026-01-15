@@ -128,17 +128,17 @@ static void RemoteControlSet()
         // gimbal_cmd_send.yaw += -0.001f * (float)rc_data[TEMP].rc.rocker_l_;
         mc_data[TEMP].rocker_l_=float_deadband((float)mc_data[TEMP].rocker_l_, -20, 20);//遥控器拨杆死区处理
         mc_data[TEMP].rocker_l1=float_deadband((float)mc_data[TEMP].rocker_l1, -20, 20);//遥控器拨杆死区处理
-        gimbal_cmd_send.yaw += -0.0015f * (float)mc_data[TEMP].rocker_l_;
+        gimbal_cmd_send.yaw += -0.003f * (float)mc_data[TEMP].rocker_l_;
         gimbal_cmd_send.pitch += -0.001f * (float)mc_data[TEMP].rocker_l1;
 
     }
     // 云台软件限位
-    gimbal_cmd_send.pitch = float_constrain(gimbal_cmd_send.pitch,-21.0,21.0);
+    gimbal_cmd_send.pitch = float_constrain(gimbal_cmd_send.pitch,-10,20.0);
     gimbal_cmd_send.yaw = float_constrain(gimbal_cmd_send.yaw,-52.0,52.0);
 
     // 发射参数
-    if (switch_is_up(mc_data[TEMP].switch_right)) // 右侧开关状态[上],弹舱打开
-        ;                                            // 弹舱舵机控制,待添加servo_motor模块,开启
+    if (switch_is_up(mc_data[TEMP].switch_right)) // 右侧开关状态[上],弹舱打
+        ;                                            // 弹舱舵机控制,待添加servo_motor模块,开启0
     else
         ; // 弹舱舵机控制,待添加servo_motor模块,关闭
 
@@ -319,3 +319,4 @@ void RobotCMDTask()
     PubPushMessage(gimbal_cmd_pub, (void *)&gimbal_cmd_send);
     VisionSend(&vision_send_data);
 }
+

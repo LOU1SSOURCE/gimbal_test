@@ -29,17 +29,17 @@ void GimbalInit()
         },
         .controller_param_init_config = {
             .angle_PID = {
-                .Kp = -15, // -15
+                .Kp = -12, // -15
                 .Ki = -0.05, // -0.05
                 .Kd = -0.5, // -0.5
                 .DeadBand = 0.1,
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
                 .IntegralLimit = 100,
-                .MaxOut = 20,//500
+                .MaxOut = 50,//500
             },
             .speed_PID = {
-                .Kp = 100,  // 100
-                .Ki = 200, // 200
+                .Kp = 90,  // 100
+                .Ki = 160, // 200
                 .Kd = 0,  // 0
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
                 .IntegralLimit = 3000,
@@ -62,46 +62,41 @@ void GimbalInit()
     Motor_Init_Config_s pitch_config = {
         .can_init_config = {
             .can_handle = &hcan1,
-            .tx_id =0x101,
+            .tx_id =0x01,
             .rx_id =0x01,
         },
         .controller_param_init_config = {
-            // .angle_PID = {
-            //     .Kp = -2,  // 2
-            //     .Ki = 0,   // 0
-            //     .Kd = -0.1,    // 0.1
-            //     .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
-            //     .IntegralLimit = 5, //5
-            //     .MaxOut = 30,  // 30
-            // },
-            // .speed_PID = {
-            //     .Kp = -2.5,  // 2.5
-            //     .Ki = 0,  // 0
-            //     .Kd = -0.5,   // 0.5
-            //     .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
-            //     .IntegralLimit = 2,
-            //     .MaxOut = 4,
-            // },
-            .current_PID = {
-                .Kp = 1,  // 0.8
-                .Ki = 0,  // 0.5
-                .Kd = 0,    // 0
+            .angle_PID = {
+                .Kp = -5,    //5       
+                .Ki = -0.15, //0.15  
+                .Kd = -0.1, //0.01
+                .DeadBand = 0.1,
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
-                .IntegralLimit = 5,
-                .MaxOut = 10,
+                .IntegralLimit = 200,
+                .MaxOut = 40,
             },
-            .other_angle_feedback_ptr = &gimba_IMU_data->Roll,
+            .speed_PID = {
+                .Kp = -0.020,     // 0.005  
+                .Ki = -0.01,        // 0.1   
+                .Kd = -0.0001,   // 0.0001  
+                .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
+                .IntegralLimit = 2,
+                .MaxOut = 5,
+            },
+        .other_angle_feedback_ptr = &gimba_IMU_data->Roll,//&pitch_re,//&gimba_IMU_data->Pitch,//&pitch_re,
             // 还需要增加角速度额外反馈指针,注意方向,ins_task.md中有c板的bodyframe坐标系说明
-            .other_speed_feedback_ptr = (&gimba_IMU_data->Gyro[1]),
+         .other_speed_feedback_ptr =(&gimba_IMU_data->Gyro[1]),//&gy_re,
         },
         .controller_setting_init_config = {
             .angle_feedback_source = OTHER_FEED,
             .speed_feedback_source = OTHER_FEED,
-            .outer_loop_type = CURRENT_LOOP,
-            .close_loop_type = CURRENT_LOOP,
-            .motor_reverse_flag = MOTOR_DIRECTION_REVERSE,//MOTOR_DIRECTION_NORMAL正向，MOTOR_DIRECTION_REVERSE反向
+            .outer_loop_type = ANGLE_LOOP,
+            .close_loop_type = SPEED_LOOP | ANGLE_LOOP,
+            .motor_reverse_flag = MOTOR_DIRECTION_NORMAL,//MOTOR_DIRECTION_NORMAL,//MOTOR_DIRECTION_NORMAL,
+            .feedback_reverse_flag=FEEDBACK_DIRECTION_NORMAL,//FEEDBACK_DIRECTION_NORMAL,//FEEDBACK_DIRECTION_REVERSE,  //FEEDBACK_DIRECTION_REVERSE
         },
     };
+
     // 电机对total_angle闭环,上电时为零,会保持静止,收到遥控器数据再动
     yaw_motor = DJIMotorInit(&yaw_config);
     pitch_motor = DMMotorInit(&pitch_config);
@@ -121,13 +116,6 @@ void GimbalTask()
         // 回中yaw值
         midyaw = yaw_motor->measure.total_angle;
         power_on_centering_flag = 1;
-    }
-    if(flag == 0)
-    {
-        if(yaw_motor->measure.total_angle - midyaw < 2.0f && yaw_motor->measure.total_angle - midyaw > -2.0f)
-        {
-            flag = 1;
-        }
     }
     // 获取云台控制数据
     // 后续增加未收到数据的处理
