@@ -39,7 +39,7 @@ typedef struct
     uint16_t velocity_des;
     uint16_t torque_des;
     uint16_t Kp;
-    uint16_t Kd;
+    int16_t Kd;
 }DMMotor_Send_s;
 
 typedef struct 
