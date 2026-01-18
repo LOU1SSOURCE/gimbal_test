@@ -72,10 +72,14 @@ static void VisionOfflineCallback(void *id)
  */
 static void DecodeVision()
 {
-    uint16_t flag_register;
-    DaemonReload(vision_daemon_instance); // 喂狗
-    get_protocol_info(vision_usart_instance->recv_buff, &flag_register, (uint8_t *)&recv_data.pitch);
+    // uint16_t flag_register;
+    // DaemonReload(vision_daemon_instance); // 喂狗
+    // get_protocol_info(vision_usart_instance->recv_buff, &flag_register, (uint8_t *)&recv_data.pitch);
     // TODO: code to resolve flag_register;
+    if(vision_usart_instance->recv_buff[0]==0xA5)
+        memcpy(&recv_data, &vision_usart_instance->recv_buff, 9); 
+    else
+        return;
 }
 
 Vision_Recv_s *VisionInit(UART_HandleTypeDef *_handle)

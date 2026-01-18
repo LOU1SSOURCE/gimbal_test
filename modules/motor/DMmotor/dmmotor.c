@@ -282,6 +282,10 @@ void DMMotorTask(void)
             motor_send_mailbox.torque_des = float_to_uint(0, DM_T_MIN, DM_T_MAX, 12);
             motor_send_mailbox.Kp = 0;
             motor_send_mailbox.Kd = 0;
+            motor_controller->speed_PID.Iout = 0;
+            motor_controller->angle_PID.Iout = 0;
+            motor_controller->speed_PID.Output = 0;
+            motor_controller->angle_PID.Output = 0;
         }
         motor_send_mai[i] = motor_send_mailbox;
         motor_can->tx_buff[0] = (uint8_t)(motor_send_mailbox.position_des >> 8);

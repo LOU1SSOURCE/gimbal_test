@@ -17,6 +17,8 @@ static Subscriber_t *gimbal_sub;                  // cmd控制消息订阅者
 static Gimbal_Upload_Data_s gimbal_feedback_data; // 回传给cmd的云台状态信息
 static Gimbal_Ctrl_Cmd_s gimbal_cmd_recv;         // 来自cmd的控制信息
 
+static float gravity_re = 0.0f;
+
 void GimbalInit()
 {
     gimba_IMU_data = INS_Init(); // IMU先初始化,获取姿态数据指针赋给yaw电机的其他数据来源
@@ -72,28 +74,30 @@ void GimbalInit()
                 .Kd = -0.1, //0.01
                 .DeadBand = 0.1,
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
-                .IntegralLimit = 200,
+                .IntegralLimit = 1,//200
                 .MaxOut = 40,
             },
             .speed_PID = {
-                .Kp = -0.020,     // 0.005  
-                .Ki = -0.01,        // 0.1   
-                .Kd = -0.0001,   // 0.0001  
+                .Kp = -0.02,     // 0.005
+                .Ki = -0.01,        // 0.1
+                .Kd = -0.0001,   // 0.0001
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
-                .IntegralLimit = 2,
+                .IntegralLimit = 1,//2
                 .MaxOut = 5,
             },
-        .other_angle_feedback_ptr = &gimba_IMU_data->Roll,//&pitch_re,//&gimba_IMU_data->Pitch,//&pitch_re,
+        .other_angle_feedback_ptr = &gimba_IMU_data->Roll,//角度环反馈源
             // 还需要增加角速度额外反馈指针,注意方向,ins_task.md中有c板的bodyframe坐标系说明
-         .other_speed_feedback_ptr =(&gimba_IMU_data->Gyro[1]),//&gy_re,
+        .other_speed_feedback_ptr =(&gimba_IMU_data->Gyro[1]),//速度环反馈源
+        .current_feedforward_ptr = &gravity_re,//重力补偿前馈
         },
         .controller_setting_init_config = {
             .angle_feedback_source = OTHER_FEED,
             .speed_feedback_source = OTHER_FEED,
             .outer_loop_type = ANGLE_LOOP,
             .close_loop_type = SPEED_LOOP | ANGLE_LOOP,
-            .motor_reverse_flag = MOTOR_DIRECTION_NORMAL,//MOTOR_DIRECTION_NORMAL,//MOTOR_DIRECTION_NORMAL,
-            .feedback_reverse_flag=FEEDBACK_DIRECTION_NORMAL,//FEEDBACK_DIRECTION_NORMAL,//FEEDBACK_DIRECTION_REVERSE,  //FEEDBACK_DIRECTION_REVERSE
+            .motor_reverse_flag = MOTOR_DIRECTION_NORMAL,//MOTOR_DIRECTION_NORMAL
+            .feedback_reverse_flag = FEEDBACK_DIRECTION_NORMAL,//FEEDBACK_DIRECTION_NORMAL//FEEDBACK_DIRECTION_REVERSE
+            .feedforward_flag = CURRENT_FEEDFORWARD,//CURRENT_FEEDFORWARD
         },
     };
 
@@ -109,7 +113,7 @@ void GimbalInit()
 void GimbalTask()
 {
     // 上电回中标志位
-    static uint8_t power_on_centering_flag,flag = 0;
+    static uint8_t power_on_centering_flag = 0;
     static float midyaw = 0.0f;
     if (power_on_centering_flag == 0)
     {
@@ -117,6 +121,8 @@ void GimbalTask()
         midyaw = yaw_motor->measure.total_angle;
         power_on_centering_flag = 1;
     }
+    // 计算pitch重力补偿前馈
+    // gravity_re = 0.5f * sinf(gimba_IMU_data->Roll * DEG2RAD - 20.0f * DEG2RAD);
     // 获取云台控制数据
     // 后续增加未收到数据的处理
     SubGetMessage(gimbal_sub, &gimbal_cmd_recv);
@@ -151,6 +157,17 @@ void GimbalTask()
         // DJIMotorChangeFeed(yaw_motor, SPEED_LOOP, OTHER_FEED);
         // DJIMotorSetRef(yaw_motor, gimbal_cmd_recv.yaw); // yaw和pitch会在robot_cmd中处理好多圈和单圈
         // DMMotorSetRef(pitch_motor, gimbal_cmd_recv.pitch);
+
+        DJIMotorEnable(yaw_motor);
+        DMMotorEnable(pitch_motor);
+
+        DJIMotorChangeFeed(yaw_motor, ANGLE_LOOP, OTHER_FEED);
+        DJIMotorChangeFeed(yaw_motor, SPEED_LOOP, OTHER_FEED);
+        DJIMotorSetRef(yaw_motor, gimbal_cmd_recv.yaw + midyaw); // yaw和pitch会在robot_cmd中处理好多圈和单圈
+        
+        DMMotorChangeFeed(pitch_motor, ANGLE_LOOP, OTHER_FEED);
+        DMMotorChangeFeed(pitch_motor, SPEED_LOOP, OTHER_FEED);
+        DMMotorSetRef(pitch_motor, gimbal_cmd_recv.pitch);
         break;
     default:
         break;

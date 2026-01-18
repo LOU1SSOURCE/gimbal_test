@@ -38,21 +38,24 @@ typedef enum
 typedef struct
 {
 	// Fire_Mode_e fire_mode;
-	Target_State_e target_state;
+	// Target_State_e target_state;
 	// Target_Type_e target_type;
 
 	// float pitch;
 	// float yaw;
 
+	// uint8_t header;
+	// uint8_t tracking: 1;
+	// uint8_t id: 3;          // 0-outpost 6-guard 7-base
+	// uint8_t armors_num: 3;  // 2-balance 3-outpost 4-normal
+	// uint8_t reserved: 1;
+	// int16_t pitch;
+	// int16_t yaw;
+	// int16_t shoot_mode;
+	// int16_t checksum;
 	uint8_t header;
-	uint8_t tracking: 1;
-	uint8_t id: 3;          // 0-outpost 6-guard 7-base
-	uint8_t armors_num: 3;  // 2-balance 3-outpost 4-normal
-	uint8_t reserved: 1;
-	int16_t pitch;
-	int16_t yaw;
-	int16_t shoot_mode;
-	int16_t checksum;
+	float yaw;
+	float pitch;
 } Vision_Recv_s;
 
 typedef enum
