@@ -33,6 +33,7 @@ BuzzzerInstance *BuzzerRegister(Buzzer_config_s *config)
     buzzer_temp->alarm_level = config->alarm_level;
     buzzer_temp->loudness = config->loudness;
     buzzer_temp->octave = config->octave;
+    buzzer_temp->stream = config->stream;
     buzzer_temp->alarm_state = ALARM_OFF;
 
     buzzer_list[config->alarm_level] = buzzer_temp;
@@ -61,33 +62,66 @@ void BuzzerTask()
         else
         {
             PWMSetDutyRatio(buzzer, buzz->loudness);
-            switch (buzz->octave)
+            if(buzz->stream == USE_OCTAVE)
             {
-            case OCTAVE_1:
-                PWMSetPeriod(buzzer, (float)1 / DoFreq);
-                break;
-            case OCTAVE_2:
-                PWMSetPeriod(buzzer, (float)1 / ReFreq);
-                break;
-            case OCTAVE_3:
-                PWMSetPeriod(buzzer, (float)1 / MiFreq);
-                break;
-            case OCTAVE_4:
-                PWMSetPeriod(buzzer, (float)1 / FaFreq);
-                break;
-            case OCTAVE_5:
-                PWMSetPeriod(buzzer, (float)1 / SoFreq);
-                break;
-            case OCTAVE_6:
-                PWMSetPeriod(buzzer, (float)1 / LaFreq);
-                break;
-            case OCTAVE_7:
-                PWMSetPeriod(buzzer, (float)1 / SiFreq);
-                break;
-            default:
-                break;
+                switch (buzz->octave)
+                {
+                case OCTAVE_1:
+                    PWMSetPeriod(buzzer, (float)1 / DoFreq);
+                    break;
+                case OCTAVE_2:
+                    PWMSetPeriod(buzzer, (float)1 / ReFreq);
+                    break;
+                case OCTAVE_3:
+                    PWMSetPeriod(buzzer, (float)1 / MiFreq);
+                    break;
+                case OCTAVE_4:
+                    PWMSetPeriod(buzzer, (float)1 / FaFreq);
+                    break;
+                case OCTAVE_5:
+                    PWMSetPeriod(buzzer, (float)1 / SoFreq);
+                    break;
+                case OCTAVE_6:
+                    PWMSetPeriod(buzzer, (float)1 / LaFreq);
+                    break;
+                case OCTAVE_7:
+                    PWMSetPeriod(buzzer, (float)1 / SiFreq);
+                    break;
+                case OCTAVE_8:
+                    PWMSetPeriod(buzzer, (float)1 / DoHighFreq);
+                    break;
+                default:
+                    break;
+                }
             }
-            break;
+            if(buzz->octave == USE_STREAM)
+            {
+                switch (buzz->stream)
+                {
+                case STREAM_INIT:
+                    PWMSetPeriod(buzzer, (float)1 / DoFreq);
+                    DWT_Delay(0.2);
+                    PWMSetPeriod(buzzer, (float)1 / MiFreq);
+                    DWT_Delay(0.2);
+                    PWMSetPeriod(buzzer, (float)1 / SoFreq);
+                    DWT_Delay(0.2);
+                    AlarmSetStatus(buzz,ALARM_OFF);
+                    break;
+                case STREAM_ERROR:
+                    PWMSetPeriod(buzzer, (float)1 / DoHighFreq);
+                    DWT_Delay(0.1);
+                    PWMSetPeriod(buzzer, (float)1 / SiFreq);
+                    DWT_Delay(0.1);
+                    PWMSetPeriod(buzzer, (float)1 / DoHighFreq);
+                    DWT_Delay(0.1);
+                    PWMSetPeriod(buzzer, (float)1 / SiFreq);
+                    DWT_Delay(0.1);
+                    // AlarmSetStatus(buzz,ALARM_OFF);
+                    break;
+                default:
+                    break;
+                }
+            }
         }
     }
 }

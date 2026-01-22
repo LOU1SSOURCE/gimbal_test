@@ -10,6 +10,7 @@
 #define  SoFreq  784
 #define  LaFreq  880
 #define  SiFreq  988
+#define  DoHighFreq  1046
 
 typedef enum
 {
@@ -21,7 +22,16 @@ typedef enum
     OCTAVE_6,
     OCTAVE_7,
     OCTAVE_8,
+    USE_STREAM,
 }octave_e;
+
+typedef enum
+{    
+    STREAM_INIT,
+    STREAM_END,
+    STREAM_ERROR,
+    USE_OCTAVE,
+}stream_e;
 
 typedef enum
 {
@@ -41,6 +51,7 @@ typedef struct
 {
     AlarmLevel_e alarm_level;
     octave_e octave;
+    stream_e stream;
     float loudness;
 }Buzzer_config_s;
 
@@ -48,6 +59,7 @@ typedef struct
 {
     float loudness;
     octave_e octave;
+    stream_e stream;
     AlarmLevel_e alarm_level;
     AlarmState_e alarm_state;
 }BuzzzerInstance;

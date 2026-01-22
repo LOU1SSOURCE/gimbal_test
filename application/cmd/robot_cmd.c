@@ -116,33 +116,20 @@ static void RemoteControlSet()
     }
 
     // 云台参数,确定云台控制数据
-    if (switch_is_mid(mc_data[TEMP].switch_left)) // 左侧开关状态为[中],视觉模式
-    {
-        // 待添加,视觉会发来和目标的误差,同样将其转化为total angle的增量进行控制
-        // ...
-        gimbal_cmd_send.yaw = -vision_recv_data->yaw;
-        gimbal_cmd_send.pitch = vision_recv_data->pitch;
-    }
     // 左侧开关状态为[下],或视觉未识别到目标,纯遥控器拨杆控制
     // if (switch_is_down(mc_data[TEMP].switch_left) || vision_recv_data->target_state == NO_TARGET)
-    if (switch_is_down(mc_data[TEMP].switch_left) && (switch_is_down(mc_data[TEMP].switch_right) || switch_is_mid(mc_data[TEMP].switch_right))) // 双拨杆均为下,纯遥控器拨杆控制
+    if (switch_is_down(mc_data[TEMP].switch_left) && (switch_is_down(mc_data[TEMP].switch_right) || switch_is_mid(mc_data[TEMP].switch_right)))
     { // 按照摇杆的输出大小进行角度增量,增益系数需调整
         //gimbal_cmd_send.yaw += 0.005f * (float)rc_data[TEMP].rc.rocker_l_;
         // gimbal_cmd_send.yaw += -0.001f * (float)rc_data[TEMP].rc.rocker_l_;
         mc_data[TEMP].rocker_l_=float_deadband((float)mc_data[TEMP].rocker_l_, -20, 20);//遥控器拨杆死区处理
         mc_data[TEMP].rocker_l1=float_deadband((float)mc_data[TEMP].rocker_l1, -20, 20);//遥控器拨杆死区处理
         gimbal_cmd_send.yaw += -0.003f * (float)mc_data[TEMP].rocker_l_;
-        gimbal_cmd_send.pitch += -0.001f * (float)mc_data[TEMP].rocker_l1;
+        gimbal_cmd_send.pitch += -0.0015f * (float)mc_data[TEMP].rocker_l1;
     }
     // 云台软件限位
     gimbal_cmd_send.pitch = float_constrain(gimbal_cmd_send.pitch,-10,20.0);
     gimbal_cmd_send.yaw = float_constrain(gimbal_cmd_send.yaw,-52.0,52.0);
-
-    // 发射参数
-    if (switch_is_up(mc_data[TEMP].switch_right)) // 右侧开关状态[上],弹舱打开
-        ;                                            // 弹舱舵机控制,待添加servo_motor模块,开启
-    else
-        ; // 弹舱舵机控制,待添加servo_motor模块,关闭
 
     // 摩擦轮控制,拨轮向上打为负,向下为正
     if (mc_data[TEMP].rocker_r1 > 200) // 向上超过100,打开摩擦轮
@@ -162,6 +149,19 @@ static void RemoteControlSet()
         shoot_cmd_send.load_mode = LOAD_STOP;
     // 射频控制,固定每秒1发,后续可以根据左侧拨轮的值大小切换射频,
     shoot_cmd_send.shoot_rate = 8;
+}
+
+static void VisionControlSet()
+{
+    if (switch_is_mid(mc_data[TEMP].switch_left)) // 左侧开关状态为[中],视觉模式
+    {
+        gimbal_cmd_send.yaw = -vision_recv_data->yaw;
+        gimbal_cmd_send.pitch = vision_recv_data->pitch;
+    }
+    // 云台软件限位
+    gimbal_cmd_send.pitch = float_constrain(gimbal_cmd_send.pitch,-10,20.0);
+    gimbal_cmd_send.yaw = float_constrain(gimbal_cmd_send.yaw,-52.0,52.0);
+
 }
 
 /**
@@ -301,11 +301,13 @@ void RobotCMDTask()
     // 根据gimbal的反馈值计算云台和底盘正方向的夹角,不需要传参,通过static私有变量完成
     CalcOffsetAngle();
     // 根据遥控器左侧开关,确定当前使用的控制模式为遥控器调试还是键鼠
-    if (switch_is_down(mc_data[TEMP].switch_left) || switch_is_mid(mc_data[TEMP].switch_left)) // 遥控器左侧开关状态为[中/下],视觉/遥控器控制
+    if (switch_is_down(mc_data[TEMP].switch_left)) // 遥控器左侧开关状态为[下],遥控器控制
         RemoteControlSet();
     else if (switch_is_up(mc_data[TEMP].switch_left)) // 遥控器左侧开关状态为[上],键盘控制
         // MouseKeySet();
         ;
+    else if (switch_is_mid(mc_data[TEMP].switch_left))
+        VisionControlSet();
 
     EmergencyHandler(); // 处理模块离线和遥控器急停等紧急情况
 

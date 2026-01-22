@@ -7,6 +7,7 @@
 #include "general_def.h"
 
 #include "bmi088.h"
+#include "buzzer.h"
 
 static attitude_t *gimba_IMU_data; // 云台IMU数据
 static DJIMotorInstance *yaw_motor;
@@ -17,7 +18,7 @@ static Subscriber_t *gimbal_sub;                  // cmd控制消息订阅者
 static Gimbal_Upload_Data_s gimbal_feedback_data; // 回传给cmd的云台状态信息
 static Gimbal_Ctrl_Cmd_s gimbal_cmd_recv;         // 来自cmd的控制信息
 
-static float gravity_re = 0.0f;
+static float gravity_re = 0;
 
 void GimbalInit()
 {
@@ -70,15 +71,17 @@ void GimbalInit()
         .controller_param_init_config = {
             .angle_PID = {
                 .Kp = -5,    //5       
-                .Ki = -0.15, //0.15  
+                .Ki = -1.0, //0.15  
                 .Kd = -0.1, //0.01
                 .DeadBand = 0.1,
-                .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
-                .IntegralLimit = 1,//200
+                .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement |PID_ChangingIntegrationRate,
+                .CoefA = 2.0,
+                .CoefB = 0.1,
+                .IntegralLimit = 50,//200
                 .MaxOut = 40,
             },
             .speed_PID = {
-                .Kp = -0.02,     // 0.005
+                .Kp = -0.03,     // 0.005
                 .Ki = -0.01,        // 0.1
                 .Kd = -0.0001,   // 0.0001
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
@@ -87,12 +90,12 @@ void GimbalInit()
             },
         .other_angle_feedback_ptr = &gimba_IMU_data->Roll,//角度环反馈源
             // 还需要增加角速度额外反馈指针,注意方向,ins_task.md中有c板的bodyframe坐标系说明
-        .other_speed_feedback_ptr =(&gimba_IMU_data->Gyro[1]),//速度环反馈源
+        // .other_speed_feedback_ptr = &gimba_IMU_data->Gyro[1],//速度环反馈源
         .current_feedforward_ptr = &gravity_re,//重力补偿前馈
         },
         .controller_setting_init_config = {
             .angle_feedback_source = OTHER_FEED,
-            .speed_feedback_source = OTHER_FEED,
+            .speed_feedback_source = MOTOR_FEED, //使用电机自身速度反馈
             .outer_loop_type = ANGLE_LOOP,
             .close_loop_type = SPEED_LOOP | ANGLE_LOOP,
             .motor_reverse_flag = MOTOR_DIRECTION_NORMAL,//MOTOR_DIRECTION_NORMAL
@@ -107,6 +110,16 @@ void GimbalInit()
 
     gimbal_pub = PubRegister("gimbal_feed", sizeof(Gimbal_Upload_Data_s));
     gimbal_sub = SubRegister("gimbal_cmd", sizeof(Gimbal_Ctrl_Cmd_s));
+
+    BuzzzerInstance *gimbal_init_alarm;
+    Buzzer_config_s gimbal_init_alarm_config={
+        .alarm_level=ALARM_LEVEL_LOW,
+        .loudness=0.1f,
+        .octave=USE_STREAM,
+        .stream=STREAM_INIT,
+    };
+    gimbal_init_alarm = BuzzerRegister(&gimbal_init_alarm_config);
+    AlarmSetStatus(gimbal_init_alarm,ALARM_ON);
 }
 
 /* 机器人云台控制核心任务,后续考虑只保留IMU控制,不再需要电机的反馈 */
@@ -115,14 +128,30 @@ void GimbalTask()
     // 上电回中标志位
     static uint8_t power_on_centering_flag = 0;
     static float midyaw = 0.0f;
+
+    static float last_pitch_ref, current_pitch_ref;
+    last_pitch_ref = current_pitch_ref;
+    current_pitch_ref = gimbal_cmd_recv.pitch;
+    if(current_pitch_ref - last_pitch_ref > 0.01f)
+    {
+        gravity_re = 0.2;
+    }
+    else if((current_pitch_ref - last_pitch_ref) < -0.01f)
+    {
+        gravity_re = -0.4;
+    }
+    else
+    {
+        gravity_re = 0;
+    }
+
     if (power_on_centering_flag == 0)
     {
         // 回中yaw值
         midyaw = yaw_motor->measure.total_angle;
         power_on_centering_flag = 1;
     }
-    // 计算pitch重力补偿前馈
-    // gravity_re = 0.5f * sinf(gimba_IMU_data->Roll * DEG2RAD - 20.0f * DEG2RAD);
+
     // 获取云台控制数据
     // 后续增加未收到数据的处理
     SubGetMessage(gimbal_sub, &gimbal_cmd_recv);
@@ -146,8 +175,8 @@ void GimbalTask()
         DJIMotorSetRef(yaw_motor, gimbal_cmd_recv.yaw + midyaw); // yaw和pitch会在robot_cmd中处理好多圈和单圈
         
         DMMotorChangeFeed(pitch_motor, ANGLE_LOOP, OTHER_FEED);
-        DMMotorChangeFeed(pitch_motor, SPEED_LOOP, OTHER_FEED);
         DMMotorSetRef(pitch_motor, gimbal_cmd_recv.pitch);
+        DMMotorSetFed(pitch_motor, gravity_re);
         break;
     // 云台自由模式,使用编码器反馈,底盘和云台分离,仅云台旋转,一般用于调整云台姿态(英雄吊射等)/能量机关
     case GIMBAL_FREE_MODE: // 后续删除,或加入云台追地盘的跟随模式(响应速度更快)
@@ -166,8 +195,8 @@ void GimbalTask()
         DJIMotorSetRef(yaw_motor, gimbal_cmd_recv.yaw + midyaw); // yaw和pitch会在robot_cmd中处理好多圈和单圈
         
         DMMotorChangeFeed(pitch_motor, ANGLE_LOOP, OTHER_FEED);
-        DMMotorChangeFeed(pitch_motor, SPEED_LOOP, OTHER_FEED);
         DMMotorSetRef(pitch_motor, gimbal_cmd_recv.pitch);
+        DMMotorSetFed(pitch_motor, gravity_re);
         break;
     default:
         break;
