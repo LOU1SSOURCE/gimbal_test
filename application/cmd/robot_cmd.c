@@ -47,6 +47,9 @@ static Shoot_Upload_Data_s shoot_fetch_data; // 从发射获取的反馈信息
 
 static Robot_Status_e robot_state; // 机器人整体工作状态
 
+static uint16_t vision_yaw,vision_pitch;
+static float vision_decode_yaw, vision_decode_pitch;
+
 void RobotCMDInit()
 {
     mc_data = MCControlInit(&huart3);   // 修改为对应串口,注意如果是自研板dbus协议串口需选用添加了反相器的那个
@@ -106,12 +109,10 @@ static void RemoteControlSet()
     // 控制底盘和云台运行模式,云台待添加,云台是否始终使用IMU数据?
     if (switch_is_down(mc_data[TEMP].switch_right)) // 右侧开关状态[下],底盘跟随云台
     {
-        chassis_cmd_send.chassis_mode = CHASSIS_ROTATE;
         gimbal_cmd_send.gimbal_mode = GIMBAL_GYRO_MODE;
     }
     else if (switch_is_mid(mc_data[TEMP].switch_right)) // 右侧开关状态[中],底盘和云台分离,底盘保持不转动
     {
-        chassis_cmd_send.chassis_mode = CHASSIS_NO_FOLLOW;
         gimbal_cmd_send.gimbal_mode = GIMBAL_FREE_MODE;
     }
 
@@ -148,15 +149,17 @@ static void RemoteControlSet()
     else
         shoot_cmd_send.load_mode = LOAD_STOP;
     // 射频控制,固定每秒1发,后续可以根据左侧拨轮的值大小切换射频,
-    shoot_cmd_send.shoot_rate = 8;
+    shoot_cmd_send.shoot_rate = 7;
 }
 
 static void VisionControlSet()
 {
     if (switch_is_mid(mc_data[TEMP].switch_left)) // 左侧开关状态为[中],视觉模式
     {
-        gimbal_cmd_send.yaw = -vision_recv_data->yaw;
-        gimbal_cmd_send.pitch = vision_recv_data->pitch;
+        vision_decode_yaw = (float)vision_recv_data->yaw/1000.0f;
+        vision_decode_pitch = (float)vision_recv_data->pitch/1000.0f;
+        gimbal_cmd_send.yaw = vision_decode_yaw;
+        gimbal_cmd_send.pitch = vision_decode_pitch;
     }
     // 云台软件限位
     gimbal_cmd_send.pitch = float_constrain(gimbal_cmd_send.pitch,-10,20.0);
@@ -270,17 +273,11 @@ static void EmergencyHandler()
         gimbal_cmd_send.gimbal_mode = GIMBAL_ZERO_FORCE;// 云台急停模式
         LOGERROR("[CMD] emergency stop!");
     }
-    // 遥控器右侧开关为[下],恢复正常工作状态
+    // 遥控器右侧开关为[中/下],恢复正常工作状态
     if (switch_is_down(mc_data[TEMP].switch_right) || switch_is_mid(mc_data[TEMP].switch_right))
     {
         robot_state = ROBOT_READY;
-        shoot_cmd_send.shoot_mode = SHOOT_ON;
-        gimbal_cmd_send.gimbal_mode = GIMBAL_GYRO_MODE;
-
-        shoot_cmd_send.shoot_mode = SHOOT_ON;
-        shoot_cmd_send.friction_mode = FRICTION_ON;
-        shoot_cmd_send.load_mode = LOAD_BURSTFIRE;
-        
+        gimbal_cmd_send.gimbal_mode = GIMBAL_GYRO_MODE;        
         LOGINFO("[CMD] reinstate, robot ready");
     }
 }

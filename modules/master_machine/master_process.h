@@ -4,7 +4,7 @@
 #include "bsp_usart.h"
 #include "seasky_protocol.h"
 
-#define VISION_RECV_SIZE 10u // 当前为固定值,36字节
+#define VISION_RECV_SIZE 14u // 当前为固定值,36字节
 #define VISION_SEND_SIZE 32u
 
 #pragma pack(1)
@@ -44,18 +44,15 @@ typedef struct
 	// float pitch;
 	// float yaw;
 
-	// uint8_t header;
-	// uint8_t tracking: 1;
-	// uint8_t id: 3;          // 0-outpost 6-guard 7-base
-	// uint8_t armors_num: 3;  // 2-balance 3-outpost 4-normal
-	// uint8_t reserved: 1;
-	// int16_t pitch;
-	// int16_t yaw;
-	// int16_t shoot_mode;
-	// int16_t checksum;
 	uint8_t header;
-	float yaw;
-	float pitch;
+	uint8_t tracking: 1;
+	uint8_t id: 3;          // 0-outpost 6-guard 7-base
+	uint8_t armors_num: 3;  // 2-balance 3-outpost 4-normal
+	uint8_t reserved: 1;
+	int32_t pitch;
+	int32_t yaw;
+	int16_t shoot_mode;
+	int16_t checksum;
 } Vision_Recv_s;
 
 typedef enum

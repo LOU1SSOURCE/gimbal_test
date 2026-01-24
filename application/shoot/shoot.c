@@ -140,35 +140,20 @@ void ShootTask()
         DJIMotorOuterLoop(loader, SPEED_LOOP); // 切换到速度环
         DJIMotorSetRef(loader, 0);             // 同时设定参考值为0,这样停止的速度最快
         break;
-    // 单发模式,根据鼠标按下的时间,触发一次之后需要进入不响应输入的状态(否则按下的时间内可能多次进入,导致多次发射)
-    case LOAD_1_BULLET:                                                                     // 激活能量机关/干扰对方用,英雄用.
-        DJIMotorOuterLoop(loader, ANGLE_LOOP);                                              // 切换到角度环
-        DJIMotorSetRef(loader, loader->measure.total_angle + ONE_BULLET_DELTA_ANGLE); // 控制量增加一发弹丸的角度
-        hibernate_time = DWT_GetTimeline_ms();                                              // 记录触发指令的时间
-        dead_time = 150;                                                                    // 完成1发弹丸发射的时间
-        break;
-    // 三连发,如果不需要后续可能删除
-    case LOAD_3_BULLET:
-        DJIMotorOuterLoop(loader, ANGLE_LOOP);                                                  // 切换到速度环
-        DJIMotorSetRef(loader, loader->measure.total_angle + 3 * ONE_BULLET_DELTA_ANGLE); // 增加3发
-        hibernate_time = DWT_GetTimeline_ms();                                                  // 记录触发指令的时间
-        dead_time = 300;                                                                        // 完成3发弹丸发射的时间
-        break;
     // 连发模式,对速度闭环,射频后续修改为可变,目前固定为1Hz
     case LOAD_BURSTFIRE:
         DJIMotorOuterLoop(loader, SPEED_LOOP);
-        DJIMotorSetRef(loader, shoot_cmd_recv.shoot_rate * 360 * REDUCTION_RATIO_LOADER / 8);
+        DJIMotorSetRef(loader, shoot_cmd_recv.shoot_rate * 360 * REDUCTION_RATIO_LOADER / 7);
         // x颗/秒换算成速度: 已知一圈的载弹量,由此计算出1s需要转的角度,注意换算角速度(DJIMotor的速度单位是angle per second)
         break;
     // 拨盘反转,对速度闭环,后续增加卡弹检测(通过裁判系统剩余热量反馈和电机电流)
     // 也有可能需要从switch-case中独立出来
     case LOAD_REVERSE:
-        DJIMotorOuterLoop(loader, SPEED_LOOP);
+        // DJIMotorOuterLoop(loader, SPEED_LOOP);
         // ...
         break;
     default:
-        while (1)
-            ; // 未知模式,停止运行,检查指针越界,内存溢出等问题
+        break;
     }
 
     // 确定是否开启摩擦轮,后续可能修改为键鼠模式下始终开启摩擦轮(上场时建议一直开启)

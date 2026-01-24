@@ -38,8 +38,8 @@ void VisionSetFlag(Enemy_Color_e enemy_color, Work_Mode_e work_mode, Bullet_Spee
 void VisionSetAltitude(float yaw, float pitch, float roll)
 {
     send_data.yaw = yaw;
-    send_data.pitch = pitch;
-    send_data.roll = roll;
+    send_data.pitch = roll;
+    send_data.roll = pitch;//C板安装坐标roll和pitch调换
 }
 
 /**
@@ -80,7 +80,7 @@ static void DecodeVision()
     // get_protocol_info(vision_usart_instance->recv_buff, &flag_register, (uint8_t *)&recv_data.pitch);
     // TODO: code to resolve flag_register;
     if(vision_usart_instance->recv_buff[0]==0xA5)
-        memcpy(&recv_data, &vision_usart_instance->recv_buff, 9);
+        memcpy(&recv_data, &vision_usart_instance->recv_buff, VISION_RECV_SIZE);
     else
         return;
 }

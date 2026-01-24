@@ -114,7 +114,7 @@ void GimbalInit()
     BuzzzerInstance *gimbal_init_alarm;
     Buzzer_config_s gimbal_init_alarm_config={
         .alarm_level=ALARM_LEVEL_LOW,
-        .loudness=0.1f,
+        .loudness=0.03f,
         .octave=USE_STREAM,
         .stream=STREAM_INIT,
     };
@@ -180,13 +180,6 @@ void GimbalTask()
         break;
     // 云台自由模式,使用编码器反馈,底盘和云台分离,仅云台旋转,一般用于调整云台姿态(英雄吊射等)/能量机关
     case GIMBAL_FREE_MODE: // 后续删除,或加入云台追地盘的跟随模式(响应速度更快)
-        // DJIMotorEnable(yaw_motor);
-        // DMMotorEnable(pitch_motor);
-        // DJIMotorChangeFeed(yaw_motor, ANGLE_LOOP, OTHER_FEED);
-        // DJIMotorChangeFeed(yaw_motor, SPEED_LOOP, OTHER_FEED);
-        // DJIMotorSetRef(yaw_motor, gimbal_cmd_recv.yaw); // yaw和pitch会在robot_cmd中处理好多圈和单圈
-        // DMMotorSetRef(pitch_motor, gimbal_cmd_recv.pitch);
-
         DJIMotorEnable(yaw_motor);
         DMMotorEnable(pitch_motor);
 

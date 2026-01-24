@@ -116,7 +116,7 @@ void BuzzerTask()
                     DWT_Delay(0.1);
                     PWMSetPeriod(buzzer, (float)1 / SiFreq);
                     DWT_Delay(0.1);
-                    // AlarmSetStatus(buzz,ALARM_OFF);
+                    AlarmSetStatus(buzz,ALARM_OFF);
                     break;
                 default:
                     break;
