@@ -76,8 +76,6 @@ void RobotCMDInit()
     };
     cmd_can_comm = CANCommInit(&comm_conf);
 #endif // GIMBAL_BOARD
-    gimbal_cmd_send.pitch = 0;
-    gimbal_cmd_send.yaw = 0;
     robot_state = ROBOT_READY; // 启动时机器人进入工作模式,后续加入所有应用初始化完成之后再进入
 }
 
@@ -120,18 +118,34 @@ static void RemoteControlSet()
     // 左侧开关状态为[下],或视觉未识别到目标,纯遥控器拨杆控制
     // if (switch_is_down(mc_data[TEMP].switch_left) || vision_recv_data->target_state == NO_TARGET)
     if (switch_is_down(mc_data[TEMP].switch_left) && (switch_is_down(mc_data[TEMP].switch_right) || switch_is_mid(mc_data[TEMP].switch_right)))
-    { // 按照摇杆的输出大小进行角度增量,增益系数需调整
-        //gimbal_cmd_send.yaw += 0.005f * (float)rc_data[TEMP].rc.rocker_l_;
-        // gimbal_cmd_send.yaw += -0.001f * (float)rc_data[TEMP].rc.rocker_l_;
+    {
         mc_data[TEMP].rocker_l_=float_deadband((float)mc_data[TEMP].rocker_l_, -20, 20);//遥控器拨杆死区处理
         mc_data[TEMP].rocker_l1=float_deadband((float)mc_data[TEMP].rocker_l1, -20, 20);//遥控器拨杆死区处理
-        gimbal_cmd_send.yaw += -0.003f * (float)mc_data[TEMP].rocker_l_;
-        gimbal_cmd_send.pitch += -0.0015f * (float)mc_data[TEMP].rocker_l1;
+        //由于不知道yaw初始位置，以下根据yaw电机当前角度做了软件限位。TODO:在CalcOffsetAngle中获取yaw电机偏移角度更直接
+        //yaw正向前是gimbal_fetch_data.yaw_motor_single_round_angle在0和360跳变的位置，所以处理较复杂
+        //限位在315°到360°之间和0°到45°之间
+        if(gimbal_fetch_data.yaw_motor_single_round_angle<45.0f || gimbal_fetch_data.yaw_motor_single_round_angle>315.0f)
+        {
+            gimbal_cmd_send.yaw += -0.003f * (float)mc_data[TEMP].rocker_l_;
+        }
+        if(gimbal_fetch_data.yaw_motor_single_round_angle>=280.0f && gimbal_fetch_data.yaw_motor_single_round_angle<=315.0f)
+        {
+            if(mc_data[TEMP].rocker_l_<0)
+                gimbal_cmd_send.yaw += 0.0;//此时还向右打杆则没有反应
+            else gimbal_cmd_send.yaw += -0.003f * (float)mc_data[TEMP].rocker_l_;           
+        }
+         if(gimbal_fetch_data.yaw_motor_single_round_angle>=45.0f && gimbal_fetch_data.yaw_motor_single_round_angle<=80.0f)
+        {
+            if(mc_data[TEMP].rocker_l_>0)
+                gimbal_cmd_send.yaw += 0.0;//此时还向左打杆则没有反应
+            else
+                gimbal_cmd_send.yaw += -0.003f * (float)mc_data[TEMP].rocker_l_;            
+        }
+       gimbal_cmd_send.pitch += -0.0015f * (float)mc_data[TEMP].rocker_l1;
     }
     // 云台软件限位
-    gimbal_cmd_send.pitch = float_constrain(gimbal_cmd_send.pitch,-10,20.0);
-    gimbal_cmd_send.yaw = float_constrain(gimbal_cmd_send.yaw,-52.0,52.0);
-
+    gimbal_cmd_send.pitch = float_constrain(gimbal_cmd_send.pitch,-10,20.0);//pitch限位
+    // gimbal_cmd_send.yaw = float_constrain(gimbal_cmd_send.yaw,-52.0,52.0);
     // 摩擦轮控制,拨轮向上打为负,向下为正
     if (mc_data[TEMP].rocker_r1 > 200) // 向上超过100,打开摩擦轮
     {    
@@ -262,7 +276,7 @@ static void MouseKeySet()
 static void EmergencyHandler()
 {
     // 拨轮的向下拨超过一半进入急停模式.注意向打时下拨轮是正
-    if (switch_is_up(mc_data[TEMP].switch_right) || robot_state == ROBOT_STOP) // 还需添加重要应用和模块离线的判断
+    if (switch_is_up(mc_data[TEMP].switch_right) || robot_state == ROBOT_STOP  || MCControlIsOnline() == 0)
     {
         robot_state = ROBOT_STOP;
         chassis_cmd_send.chassis_mode = CHASSIS_ZERO_FORCE;
@@ -277,7 +291,7 @@ static void EmergencyHandler()
     if (switch_is_down(mc_data[TEMP].switch_right) || switch_is_mid(mc_data[TEMP].switch_right))
     {
         robot_state = ROBOT_READY;
-        gimbal_cmd_send.gimbal_mode = GIMBAL_GYRO_MODE;        
+        gimbal_cmd_send.gimbal_mode = GIMBAL_GYRO_MODE;
         LOGINFO("[CMD] reinstate, robot ready");
     }
 }

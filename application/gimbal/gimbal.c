@@ -32,24 +32,23 @@ void GimbalInit()
         },
         .controller_param_init_config = {
             .angle_PID = {
-                .Kp = -12, // -15
+                .Kp = -15, // -15
                 .Ki = -0.05, // -0.05
                 .Kd = -0.5, // -0.5
                 .DeadBand = 0.1,
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
                 .IntegralLimit = 100,
-                .MaxOut = 50,//500
+                .MaxOut = 80,//500
             },
             .speed_PID = {
-                .Kp = 90,  // 100
-                .Ki = 160, // 200
+                .Kp = 100,  // 100
+                .Ki = 200, // 200
                 .Kd = 0,  // 0
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
                 .IntegralLimit = 3000,
                 .MaxOut = 20000,
             },
             .other_angle_feedback_ptr = &gimba_IMU_data->YawTotalAngle,
-            //.other_angle_feedback_ptr = &gimba_IMU_data->Yaw_feedback,
             // 还需要增加角速度额外反馈指针,注意方向,ins_task.md中有c板的bodyframe坐标系说明
             .other_speed_feedback_ptr = &gimba_IMU_data->Gyro[2],
         },
@@ -70,7 +69,7 @@ void GimbalInit()
         },
         .controller_param_init_config = {
             .angle_PID = {
-                .Kp = -5,    //5       
+                .Kp = -7,    //5       
                 .Ki = -1.0, //0.15  
                 .Kd = -0.1, //0.01
                 .DeadBand = 0.1,
@@ -81,7 +80,7 @@ void GimbalInit()
                 .MaxOut = 40,
             },
             .speed_PID = {
-                .Kp = -0.03,     // 0.005
+                .Kp = -0.035,     // 0.005
                 .Ki = -0.01,        // 0.1
                 .Kd = -0.0001,   // 0.0001
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
@@ -125,10 +124,6 @@ void GimbalInit()
 /* 机器人云台控制核心任务,后续考虑只保留IMU控制,不再需要电机的反馈 */
 void GimbalTask()
 {
-    // 上电回中标志位
-    static uint8_t power_on_centering_flag = 0;
-    static float midyaw = 0.0f;
-
     static float last_pitch_ref, current_pitch_ref;
     last_pitch_ref = current_pitch_ref;
     current_pitch_ref = gimbal_cmd_recv.pitch;
@@ -143,13 +138,6 @@ void GimbalTask()
     else
     {
         gravity_re = 0;
-    }
-
-    if (power_on_centering_flag == 0)
-    {
-        // 回中yaw值
-        midyaw = yaw_motor->measure.total_angle;
-        power_on_centering_flag = 1;
     }
 
     // 获取云台控制数据
@@ -172,7 +160,7 @@ void GimbalTask()
 
         DJIMotorChangeFeed(yaw_motor, ANGLE_LOOP, OTHER_FEED);
         DJIMotorChangeFeed(yaw_motor, SPEED_LOOP, OTHER_FEED);
-        DJIMotorSetRef(yaw_motor, gimbal_cmd_recv.yaw + midyaw); // yaw和pitch会在robot_cmd中处理好多圈和单圈
+        DJIMotorSetRef(yaw_motor, gimbal_cmd_recv.yaw); // yaw和pitch会在robot_cmd中处理好多圈和单圈
         
         DMMotorChangeFeed(pitch_motor, ANGLE_LOOP, OTHER_FEED);
         DMMotorSetRef(pitch_motor, gimbal_cmd_recv.pitch);
@@ -185,7 +173,7 @@ void GimbalTask()
 
         DJIMotorChangeFeed(yaw_motor, ANGLE_LOOP, OTHER_FEED);
         DJIMotorChangeFeed(yaw_motor, SPEED_LOOP, OTHER_FEED);
-        DJIMotorSetRef(yaw_motor, gimbal_cmd_recv.yaw + midyaw); // yaw和pitch会在robot_cmd中处理好多圈和单圈
+        DJIMotorSetRef(yaw_motor, gimbal_cmd_recv.yaw); // yaw和pitch会在robot_cmd中处理好多圈和单圈
         
         DMMotorChangeFeed(pitch_motor, ANGLE_LOOP, OTHER_FEED);
         DMMotorSetRef(pitch_motor, gimbal_cmd_recv.pitch);
