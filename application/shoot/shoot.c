@@ -68,26 +68,26 @@ void ShootInit()
         .controller_param_init_config = {
             .angle_PID = {
                 // 如果启用位置环来控制发弹,需要较大的I值保证输出力矩的线性度否则出现接近拨出的力矩大幅下降
-                .Kp = 70, // 10
+                .Kp = 150, // 10
                 .Ki = 10,
                 .Kd = 0,
                 .MaxOut = 200,
             },
             .speed_PID = {
-                .Kp = 700, // 10
-                .Ki = 10, // 1
+                .Kp = 5000, // 10
+                .Ki = 100, // 1
                 .Kd = 0,
                 .Improve = PID_Integral_Limit,
-                .IntegralLimit = 5000,
-                .MaxOut = 5000,
+                .IntegralLimit = 10000,
+                .MaxOut = 10000,
             },
             .current_PID = {
-                .Kp = 20.0, // 0.7
+                .Kp = 800.0, // 0.7
                 .Ki = 10.0, // 0.1
                 .Kd = 0,
                 .Improve = PID_Integral_Limit,
-                .IntegralLimit = 5000,
-                .MaxOut = 5000,
+                .IntegralLimit = 10000,
+                .MaxOut = 10000,
             },
         },
         .controller_setting_init_config = {
@@ -147,6 +147,7 @@ void ShootTask()
         // x颗/秒换算成速度: 已知一圈的载弹量,由此计算出1s需要转的角度,注意换算角速度(DJIMotor的速度单位是angle per second)
         break;
     // 拨盘反转,对速度闭环,后续增加卡弹检测(通过裁判系统剩余热量反馈和电机电流)
+    
     // 也有可能需要从switch-case中独立出来
     case LOAD_REVERSE:
         // DJIMotorOuterLoop(loader, SPEED_LOOP);
@@ -175,8 +176,8 @@ void ShootTask()
         //     DJIMotorSetRef(friction_r, 0);
         //     break;
         default: // 当前为了调试设定的默认值4000,因为还没有加入裁判系统无法读取弹速.
-            DJIMotorSetRef(friction_l, 30000);
-            DJIMotorSetRef(friction_r, 30000);
+            DJIMotorSetRef(friction_l, 15000);
+            DJIMotorSetRef(friction_r, 15000);
             break;
         }
     }

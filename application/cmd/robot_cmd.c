@@ -163,7 +163,7 @@ static void RemoteControlSet()
     else
         shoot_cmd_send.load_mode = LOAD_STOP;
     // 射频控制,固定每秒1发,后续可以根据左侧拨轮的值大小切换射频,
-    shoot_cmd_send.shoot_rate = 7;
+    shoot_cmd_send.shoot_rate = 4;
 }
 
 static void VisionControlSet()

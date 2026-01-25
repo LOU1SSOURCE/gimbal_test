@@ -124,21 +124,21 @@ void GimbalInit()
 /* 机器人云台控制核心任务,后续考虑只保留IMU控制,不再需要电机的反馈 */
 void GimbalTask()
 {
-    static float last_pitch_ref, current_pitch_ref;
-    last_pitch_ref = current_pitch_ref;
-    current_pitch_ref = gimbal_cmd_recv.pitch;
-    if(current_pitch_ref - last_pitch_ref > 0.01f)
-    {
-        gravity_re = 0.2;
-    }
-    else if((current_pitch_ref - last_pitch_ref) < -0.01f)
-    {
-        gravity_re = -0.4;
-    }
-    else
-    {
-        gravity_re = 0;
-    }
+    // static float last_pitch_ref, current_pitch_ref;
+    // last_pitch_ref = current_pitch_ref;
+    // current_pitch_ref = gimbal_cmd_recv.pitch;
+    // if(current_pitch_ref - last_pitch_ref > 0.01f)
+    // {
+    //     gravity_re = 0.2;
+    // }
+    // else if((current_pitch_ref - last_pitch_ref) < -0.01f)
+    // {
+    //     gravity_re = -0.4;
+    // }
+    // else
+    // {
+    //     gravity_re = 0;
+    // }
 
     // 获取云台控制数据
     // 后续增加未收到数据的处理
