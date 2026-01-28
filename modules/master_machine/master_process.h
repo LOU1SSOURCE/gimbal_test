@@ -128,5 +128,5 @@ void VisionSetFlag(Enemy_Color_e enemy_color, Work_Mode_e work_mode, Bullet_Spee
  * @param pitch
  */
 void VisionSetAltitude(float yaw, float pitch, float roll);
-
+void VisionSetYaw(float yaw);
 #endif // !MASTER_PROCESS_H

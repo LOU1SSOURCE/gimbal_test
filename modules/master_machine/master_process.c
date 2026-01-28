@@ -37,11 +37,15 @@ void VisionSetFlag(Enemy_Color_e enemy_color, Work_Mode_e work_mode, Bullet_Spee
 
 void VisionSetAltitude(float yaw, float pitch, float roll)
 {
-    send_data.yaw = yaw;
+    // send_data.yaw = yaw;
     send_data.pitch = roll;
     send_data.roll = pitch;//C板安装坐标roll和pitch调换
 }
 
+void VisionSetYaw(float yaw)
+{
+    send_data.yaw = yaw;
+}
 /**
  * @brief 离线回调函数,将在daemon.c中被daemon task调用
  * @attention 由于HAL库的设计问题,串口开启DMA接收之后同时发送有概率出现__HAL_LOCK()导致的死锁,使得无法
