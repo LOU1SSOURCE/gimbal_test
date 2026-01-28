@@ -45,10 +45,30 @@ static Subscriber_t *shoot_feed_sub;         // 发射反馈信息订阅者
 static Shoot_Ctrl_Cmd_s shoot_cmd_send;      // 传递给发射的控制信息
 static Shoot_Upload_Data_s shoot_fetch_data; // 从发射获取的反馈信息
 
+static PIDInstance Vision_yaw_PID={
+    .Kp = 0.5,
+    .Ki = 0.002,
+    .Kd = 0.0,
+    .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
+    .IntegralLimit = 50,
+    .MaxOut = 150,
+};
+
+static PIDInstance Vision_pitch_PID={
+    .Kp = 0.0,
+    .Ki = 0.0,
+    .Kd = 0.0,
+    .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
+    .IntegralLimit = 30,
+    .MaxOut = 150,
+};
+
 static Robot_Status_e robot_state; // 机器人整体工作状态
 
 static uint16_t vision_yaw,vision_pitch;
-static float vision_decode_yaw, vision_decode_pitch;
+static float vision_yaw_ref, vision_pitch_ref;
+
+static uint8_t vision_tracing;
 
 void RobotCMDInit()
 {
@@ -98,6 +118,30 @@ static void CalcOffsetAngle()
     //     gimbal_cmd_send.offset_angle = angle - YAW_ALIGN_ANGLE + 360.0f;
 }
 
+//yaw方向需要根据机械角度进行限幅，这里只是为了代码简洁做封装
+static void RemoteYawConstrain()
+{
+    //由于不知道yaw初始位置，以下根据yaw电机当前角度做了软件限位。TODO:在CalcOffsetAngle中获取yaw电机偏移角度更直接
+    //yaw正向前是gimbal_fetch_data.yaw_motor_single_round_angle在0和360跳变的位置，所以处理较复杂
+    //限位在315°到360°之间和0°到45°之间
+    if(gimbal_fetch_data.yaw_motor_single_round_angle<45.0f || gimbal_fetch_data.yaw_motor_single_round_angle>315.0f)
+    {
+        gimbal_cmd_send.yaw += -0.003f * (float)mc_data[TEMP].rocker_l_;
+    }
+    if(gimbal_fetch_data.yaw_motor_single_round_angle>=280.0f && gimbal_fetch_data.yaw_motor_single_round_angle<=315.0f)
+    {
+        if(mc_data[TEMP].rocker_l_<0)
+            gimbal_cmd_send.yaw += 0.0;//此时还向右打杆则没有反应
+        else gimbal_cmd_send.yaw += -0.003f * (float)mc_data[TEMP].rocker_l_;
+    }
+        if(gimbal_fetch_data.yaw_motor_single_round_angle>=45.0f && gimbal_fetch_data.yaw_motor_single_round_angle<=80.0f)
+    {
+        if(mc_data[TEMP].rocker_l_>0)
+            gimbal_cmd_send.yaw += 0.0;//此时还向左打杆则没有反应
+        else
+            gimbal_cmd_send.yaw += -0.003f * (float)mc_data[TEMP].rocker_l_;
+    }
+}
 /**
  * @brief 控制输入为遥控器(调试时)的模式和控制量设置
  *
@@ -117,31 +161,12 @@ static void RemoteControlSet()
     // 云台参数,确定云台控制数据
     // 左侧开关状态为[下],或视觉未识别到目标,纯遥控器拨杆控制
     // if (switch_is_down(mc_data[TEMP].switch_left) || vision_recv_data->target_state == NO_TARGET)
-    if (switch_is_down(mc_data[TEMP].switch_left) && (switch_is_down(mc_data[TEMP].switch_right) || switch_is_mid(mc_data[TEMP].switch_right)))
+    if (switch_is_down(mc_data[TEMP].switch_left) && (switch_is_down(mc_data[TEMP].switch_right) || switch_is_mid(mc_data[TEMP].switch_right)) && vision_recv_data->tracking == 0)
     {
-        mc_data[TEMP].rocker_l_=float_deadband((float)mc_data[TEMP].rocker_l_, -20, 20);//遥控器拨杆死区处理
-        mc_data[TEMP].rocker_l1=float_deadband((float)mc_data[TEMP].rocker_l1, -20, 20);//遥控器拨杆死区处理
-        //由于不知道yaw初始位置，以下根据yaw电机当前角度做了软件限位。TODO:在CalcOffsetAngle中获取yaw电机偏移角度更直接
-        //yaw正向前是gimbal_fetch_data.yaw_motor_single_round_angle在0和360跳变的位置，所以处理较复杂
-        //限位在315°到360°之间和0°到45°之间
-        if(gimbal_fetch_data.yaw_motor_single_round_angle<45.0f || gimbal_fetch_data.yaw_motor_single_round_angle>315.0f)
-        {
-            gimbal_cmd_send.yaw += -0.003f * (float)mc_data[TEMP].rocker_l_;
-        }
-        if(gimbal_fetch_data.yaw_motor_single_round_angle>=280.0f && gimbal_fetch_data.yaw_motor_single_round_angle<=315.0f)
-        {
-            if(mc_data[TEMP].rocker_l_<0)
-                gimbal_cmd_send.yaw += 0.0;//此时还向右打杆则没有反应
-            else gimbal_cmd_send.yaw += -0.003f * (float)mc_data[TEMP].rocker_l_;           
-        }
-         if(gimbal_fetch_data.yaw_motor_single_round_angle>=45.0f && gimbal_fetch_data.yaw_motor_single_round_angle<=80.0f)
-        {
-            if(mc_data[TEMP].rocker_l_>0)
-                gimbal_cmd_send.yaw += 0.0;//此时还向左打杆则没有反应
-            else
-                gimbal_cmd_send.yaw += -0.003f * (float)mc_data[TEMP].rocker_l_;            
-        }
-       gimbal_cmd_send.pitch += -0.0015f * (float)mc_data[TEMP].rocker_l1;
+        mc_data[TEMP].rocker_l_=float_deadband((float)mc_data[TEMP].rocker_l_, -30, 30);//遥控器拨杆死区处理
+        mc_data[TEMP].rocker_l1=float_deadband((float)mc_data[TEMP].rocker_l1, -30, 30);//遥控器拨杆死区处理
+        gimbal_cmd_send.pitch += -0.0015f * (float)mc_data[TEMP].rocker_l1;
+        RemoteYawConstrain();
     }
     // 云台软件限位
     gimbal_cmd_send.pitch = float_constrain(gimbal_cmd_send.pitch,-10,20.0);//pitch限位
@@ -163,22 +188,46 @@ static void RemoteControlSet()
     else
         shoot_cmd_send.load_mode = LOAD_STOP;
     // 射频控制,固定每秒1发,后续可以根据左侧拨轮的值大小切换射频,
-    shoot_cmd_send.shoot_rate = 4;
+    shoot_cmd_send.shoot_rate = 15;
+}
+
+//yaw方向需要根据机械角度进行限幅，这里只是为了代码简洁做封装
+static void VisionYawConstrain()
+{
+    if(gimbal_fetch_data.yaw_motor_single_round_angle<45.0f || gimbal_fetch_data.yaw_motor_single_round_angle>315.0f)
+    {
+        gimbal_cmd_send.yaw = Vision_yaw_PID.Output;
+    }
+    if(gimbal_fetch_data.yaw_motor_single_round_angle>=280.0f && gimbal_fetch_data.yaw_motor_single_round_angle<=315.0f)
+    {
+        if(Vision_yaw_PID.Output > 0)
+            gimbal_cmd_send.yaw += 0.0;//此时视觉控制输出大于零则没有反应
+        else gimbal_cmd_send.yaw = Vision_yaw_PID.Output;
+    }
+    if(gimbal_fetch_data.yaw_motor_single_round_angle>=45.0f && gimbal_fetch_data.yaw_motor_single_round_angle<=80.0f)
+    {
+        if(Vision_yaw_PID.Output < 0)
+            gimbal_cmd_send.yaw += 0.0;//此时视觉控制输出小于零则没有反应
+        else
+            gimbal_cmd_send.yaw = Vision_yaw_PID.Output;
+    }
 }
 
 static void VisionControlSet()
 {
-    if (switch_is_mid(mc_data[TEMP].switch_left)) // 左侧开关状态为[中],视觉模式
+    if (switch_is_mid(mc_data[TEMP].switch_left) && vision_recv_data->tracking == 1) // 左侧开关状态为[中],视觉模式
     {
-        vision_decode_yaw = (float)vision_recv_data->yaw/1000.0f;
-        vision_decode_pitch = (float)vision_recv_data->pitch/1000.0f;
-        gimbal_cmd_send.yaw = vision_decode_yaw;
-        gimbal_cmd_send.pitch = vision_decode_pitch;
-    }
-    // 云台软件限位
-    gimbal_cmd_send.pitch = float_constrain(gimbal_cmd_send.pitch,-10,20.0);
-    gimbal_cmd_send.yaw = float_constrain(gimbal_cmd_send.yaw,-52.0,52.0);
+        vision_yaw_ref = (((float)vision_recv_data->yaw)/1000.0f)*RAD_2_DEGREE;
+        vision_pitch_ref = -(((float)vision_recv_data->pitch)/1000.0f)*RAD_2_DEGREE;
 
+        gimbal_cmd_send.yaw = PIDCalculate(&Vision_yaw_PID, gimbal_fetch_data.gimbal_imu_data.Yaw, vision_yaw_ref);
+        // PIDCalculate(&Vision_pitch_PID, gimbal_fetch_data.gimbal_imu_data.Roll, vision_pitch_ref);
+        gimbal_cmd_send.pitch = 0;
+        
+        // 云台软件限位
+        // VisionYawConstrain();
+        gimbal_cmd_send.pitch = float_constrain(gimbal_cmd_send.pitch,-10,20.0);
+    }
 }
 
 /**
@@ -268,15 +317,14 @@ static void MouseKeySet()
 */
 /**
  * @brief  紧急停止,包括遥控器左上侧拨轮打满/重要模块离线/双板通信失效等
- *         停止的阈值'300'待修改成合适的值,或改为开关控制.
+ *         开关控制.
  *
- * @todo   后续修改为遥控器离线则电机停止(关闭遥控器急停),通过给遥控器模块添加daemon实现
  *
  */
 static void EmergencyHandler()
 {
     // 拨轮的向下拨超过一半进入急停模式.注意向打时下拨轮是正
-    if (switch_is_up(mc_data[TEMP].switch_right) || robot_state == ROBOT_STOP  || MCControlIsOnline() == 0)
+    if (switch_is_up(mc_data[TEMP].switch_right) || robot_state == ROBOT_STOP)
     {
         robot_state = ROBOT_STOP;
         chassis_cmd_send.chassis_mode = CHASSIS_ZERO_FORCE;
@@ -312,16 +360,18 @@ void RobotCMDTask()
     // 根据gimbal的反馈值计算云台和底盘正方向的夹角,不需要传参,通过static私有变量完成
     CalcOffsetAngle();
     // 根据遥控器左侧开关,确定当前使用的控制模式为遥控器调试还是键鼠
-    if (switch_is_down(mc_data[TEMP].switch_left)) // 遥控器左侧开关状态为[下],遥控器控制
+    if (switch_is_down(mc_data[TEMP].switch_left) || switch_is_mid(mc_data[TEMP].switch_left)) // 遥控器左侧开关状态为[下],遥控器控制
+    {
         RemoteControlSet();
+        VisionControlSet();
+    }
     else if (switch_is_up(mc_data[TEMP].switch_left)) // 遥控器左侧开关状态为[上],键盘控制
         // MouseKeySet();
         ;
-    else if (switch_is_mid(mc_data[TEMP].switch_left))
-        VisionControlSet();
+        
 
     EmergencyHandler(); // 处理模块离线和遥控器急停等紧急情况
-
+    vision_tracing = vision_recv_data->tracking;
     // 设置视觉发送数据,还需增加加速度和角速度数据
     // VisionSetFlag(chassis_fetch_data.enemy_color,,chassis_fetch_data.bullet_speed)
 

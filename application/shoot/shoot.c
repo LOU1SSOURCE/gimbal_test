@@ -5,18 +5,29 @@
 #include "message_center.h"
 #include "bsp_dwt.h"
 #include "general_def.h"
+#include "daemon.h"
 
 /* 对于双发射机构的机器人,将下面的数据封装成结构体即可,生成两份shoot应用实例 */
 static DJIMotorInstance *friction_l, *friction_r, *loader; // 拨盘电机
 // static servo_instance *lid; 需要增加弹舱盖
-
+static DaemonInstance* shoot_daemon;
 static Publisher_t *shoot_pub;
 static Shoot_Ctrl_Cmd_s shoot_cmd_recv; // 来自cmd的发射控制信息
 static Subscriber_t *shoot_sub;
 static Shoot_Upload_Data_s shoot_feedback_data; // 来自cmd的发射控制信息
 
+// static uint8_t lockflag;
+// static float speed;
+// static uint16_t count;
+
 // dwt定时,计算冷却用
-static float hibernate_time = 0, dead_time = 0;
+// static float hibernate_time = 0, dead_time = 0;
+
+// void LoaderLockCallback(void *motor)
+// {
+//     lockflag = 1;
+// }
+
 
 void ShootInit()
 {
@@ -87,7 +98,7 @@ void ShootInit()
                 .Kd = 0,
                 .Improve = PID_Integral_Limit,
                 .IntegralLimit = 10000,
-                .MaxOut = 10000,
+                .MaxOut = 10000, //10000
             },
         },
         .controller_setting_init_config = {
@@ -103,6 +114,14 @@ void ShootInit()
 
     shoot_pub = PubRegister("shoot_feed", sizeof(Shoot_Upload_Data_s));
     shoot_sub = SubRegister("shoot_cmd", sizeof(Shoot_Ctrl_Cmd_s));
+    
+    // // 注册拨盘电机堵转守护线程
+    // Daemon_Init_Config_s daemon_config = {
+    //     .callback = LoaderLockCallback,
+    //     .owner_id = shoot_daemon,
+    //     .reload_count = 50, //堵转0.5s丢失
+    // };
+    // loader->daemon = DaemonRegister(&daemon_config);
 }
 
 /* 机器人发射机构控制核心任务 */
@@ -127,11 +146,14 @@ void ShootTask()
         DJIMotorEnable(loader);
     }
 
+    // count = shoot_daemon->temp_count;
+
     // 如果上一次触发单发或3发指令的时间加上不应期仍然大于当前时间(尚未休眠完毕),直接返回即可
     // 单发模式主要提供给能量机关激活使用(以及英雄的射击大部分处于单发)
     // if (hibernate_time + dead_time > DWT_GetTimeline_ms())
     //     return;
-
+    // if(lockflag==1)
+    // shoot_cmd_recv.load_mode=LOAD_REVERSE;
     // 若不在休眠状态,根据robotCMD传来的控制模式进行拨盘电机参考值设定和模式切换
     switch (shoot_cmd_recv.load_mode)
     {
@@ -139,18 +161,28 @@ void ShootTask()
     case LOAD_STOP:
         DJIMotorOuterLoop(loader, SPEED_LOOP); // 切换到速度环
         DJIMotorSetRef(loader, 0);             // 同时设定参考值为0,这样停止的速度最快
+        DaemonReload(shoot_daemon); // 重载守护线程计数
         break;
     // 连发模式,对速度闭环,射频后续修改为可变,目前固定为1Hz
     case LOAD_BURSTFIRE:
         DJIMotorOuterLoop(loader, SPEED_LOOP);
-        DJIMotorSetRef(loader, shoot_cmd_recv.shoot_rate * 360 * REDUCTION_RATIO_LOADER / 7);
+        DJIMotorSetRef(loader, shoot_cmd_recv.shoot_rate * 360 * REDUCTION_RATIO_LOADER / NUM_PER_CIRCLE);
         // x颗/秒换算成速度: 已知一圈的载弹量,由此计算出1s需要转的角度,注意换算角速度(DJIMotor的速度单位是angle per second)
-        break;
+        // speed = DJIMotorGetSpeed(loader);
+        // if(fabs(DJIMotorGetSpeed(loader)) > 3000.0) // 速度过低<10°/s说明卡弹,触发堵转保护
+        // {
+        //     DaemonReload(shoot_daemon); // 重载守护线程计数
+        // }
+        // break;
     // 拨盘反转,对速度闭环,后续增加卡弹检测(通过裁判系统剩余热量反馈和电机电流)
-    
+
     // 也有可能需要从switch-case中独立出来
     case LOAD_REVERSE:
+        // lockflag = 0;
         // DJIMotorOuterLoop(loader, SPEED_LOOP);
+        // DJIMotorSetRef(loader, -shoot_cmd_recv.shoot_rate * 360 * REDUCTION_RATIO_LOADER / 7);
+        // DWT_Delay(10);
+        // DaemonReload(shoot_daemon);
         // ...
         break;
     default:

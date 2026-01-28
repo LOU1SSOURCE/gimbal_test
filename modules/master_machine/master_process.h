@@ -19,7 +19,6 @@ typedef enum
 {
 	NO_TARGET = 0,
 	TARGET_CONVERGING = 1,
-	READY_TO_FIRE = 2
 } Target_State_e;
 
 typedef enum
@@ -37,13 +36,6 @@ typedef enum
 
 typedef struct
 {
-	// Fire_Mode_e fire_mode;
-	// Target_State_e target_state;
-	// Target_Type_e target_type;
-
-	// float pitch;
-	// float yaw;
-
 	uint8_t header;
 	uint8_t tracking: 1;
 	uint8_t id: 3;          // 0-outpost 6-guard 7-base
@@ -53,7 +45,7 @@ typedef struct
 	int32_t yaw;
 	int16_t shoot_mode;
 	int16_t checksum;
-} Vision_Recv_s;
+}Vision_Recv_s;
 
 typedef enum
 {

@@ -128,6 +128,7 @@ DMMotorInstance *DMMotorInit(Motor_Init_Config_s *config)
     };
     motor->motor_daemon = DaemonRegister(&conf);
     motor->feedforward = 0;
+    DMMotorSetMode(DM_CMD_CLEAR_ERROR, motor);
     DMMotorEnable(motor);
     DMMotorSetMode(DM_CMD_MOTOR_MODE, motor);
     DWT_Delay(0.1);
